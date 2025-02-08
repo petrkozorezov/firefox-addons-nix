@@ -1,0 +1,59 @@
+Нужно написать программу на python которая будет собирать данные по расширениям к firefox по api.
+- На вход принимаются опционально:
+  - количество страниц
+  - минимальное количество пользователей
+  - флаг verbose который включает отладочную информациюц
+  - количество параллельных процессов которые запрашивают страницы
+  - количество результатов на одной странице
+- если параметра --pages нет, то должны запрашиваться все страницы
+- если параметра min-users нет, то запрос к api должен быть без параметра users__gt
+- В stdout json пишется с результатом в виде массива элементов по маппингу ниже.
+- Debug пишется в stderr.
+- Если происходят какие-то ошибки, то скрипт должен падать с ошибкой, а не выкидывать элементы.
+- скрипт не должен запрашивать страницы которых нет (page_count < page)
+
+Весь код и коментарии к нему должны быть на английском.
+
+Шапка скрипта должна быть такой, чтобы через через nix питон и всё ему нужное ставилось само.
+
+api url вот такой `https://addons.mozilla.org/api/v5/addons/search/?lang=en-US&type=extension&sort=users&users__gt=100&page_size=50&page=1`
+
+В результате вот такая структура:
+```
+{
+  "page_size": 50,
+  "page_count": 100,
+  "count": 5000,
+  "next": "https://addons.mozilla.org/api/v5/addons/search/?lang=en-US&type=extensions&sort=users&users__gt=100&page_size=50&page=2",
+  "previous": null,
+  "results": [...]
+}
+```
+
+из результатов нужно выбрать такие где status == "public" && current_version.file.status == "public"
+
+данные из результатов в результирующий json надо маппить вот по такой схеме
+
+```
+{
+  pname   = slug;
+  version = current_version.version;
+  url     = current_version.file.url;
+  hash    = current_version.file.hash; # нужно переписать из формата "sha256:dce93a562ab847d32c54330bb988d61a0a621b37b5857f556e2f0a9fe230ba82" в формат SRI-хэш для NixOS
+  addonId = guid;
+  meta = {
+    homepage       = homepage.url.en-US;
+    description    = summary.en-US;
+    license        = current_version.license.slug;
+    permissions     = current_version.file.permissions;
+    requiresPayment = requires_payment;
+    compatibility   = compatibility.firefox;
+    categories      = categories;
+    tags            = tags;
+  };
+}
+```
+
+Поля meta -- опциональные.
+
+Результат должен быть отсортирован по полю 'pname'.
