@@ -16,7 +16,7 @@
 
 Шапка скрипта должна быть такой, чтобы через через nix питон и всё ему нужное ставилось само.
 
-api url вот такой `https://addons.mozilla.org/api/v5/addons/search/?lang=en-US&type=extension&sort=users&users__gt=100&page_size=50&page=1`
+api url вот такой `https://addons.mozilla.org/api/v5/addons/search/?lang=en-US&app=firefox&type=extension&sort=users&users__gt=100&page_size=50&page=1`
 
 В результате вот такая структура:
 ```
@@ -42,18 +42,23 @@ api url вот такой `https://addons.mozilla.org/api/v5/addons/search/?lang
   hash    = current_version.file.hash; # нужно переписать из формата "sha256:dce93a562ab847d32c54330bb988d61a0a621b37b5857f556e2f0a9fe230ba82" в формат SRI-хэш для NixOS
   addonId = guid;
   meta = {
-    homepage       = homepage.url.en-US;
-    description    = summary.en-US;
-    license        = current_version.license.slug;
-    permissions     = current_version.file.permissions;
-    requiresPayment = requires_payment;
-    compatibility   = compatibility.firefox;
-    categories      = categories;
-    tags            = tags;
+    homepage            = homepage.url.en-US;
+    description         = summary.en-US;
+    license             = current_version.license.slug;
+    permissions         = current_version.file.permissions;
+    hostPermissions     = current_version.file.host_permissions;
+    optionalPermissions = current_version.file.optional_permissions;
+    requiresPayment     = requires_payment;
+    compatibility       = compatibility.firefox;
+    categories          = categories;
+    tags                = tags;
+    hasEula             = has_eula;
+    hasPrivacyPolicy    = has_privacy_policy;
+    promotedCategory    = promoted.category;
   };
 }
 ```
 
-Поля meta -- опциональные.
+Поля meta опциональные, если их нет, то в выходном файле соответствующего поля тоже не должно быть. Остальные поля обязательные, если нет, то нужно падать.
 
 Результат должен быть отсортирован по полю 'pname'.
