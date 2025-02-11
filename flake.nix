@@ -21,7 +21,7 @@
             false) { value = licenses.unfree; }
           (attrsToList licenses)).value;
 
-      expectMeta = pname: self: meta: expectedMeta: let
+      allowMeta = pname: self: meta: allowedMeta: let
         diffF = new: old:
           if isList new
             then let
@@ -32,13 +32,13 @@
             else if new == old
               then null
               else new;
-        expectValue =
+        allowValue =
           { name, value }: let
             diff = diffF value meta.${name};
           in
-            diff == null || throw "firefox addon '${pname}' has inexpected meta '${name}': ${builtins.toJSON diff}\nall addon meta: ${generators.toPretty {} meta}";
+            diff == null || throw "firefox addon '${pname}' has unallowed meta '${name}': ${builtins.toJSON diff}\nall addon meta: ${generators.toPretty {} meta}";
       in
-        assert all expectValue (attrsToList expectedMeta); self;
+        assert all allowValue (attrsToList allowedMeta); self;
 
       buildFirefoxAddonFromStore =
         { pname, version, addonId, url, hash, meta }: args: let
@@ -47,7 +47,7 @@
               inherit pname version addonId;
               derivationArgs = {
                 src = args.pkgs.fetchurl { inherit url hash; };
-                passthru.expectMeta = expectMeta pname pkg meta;
+                passthru.allow = allowMeta pname pkg meta;
                 meta = meta // {
                   platform = platforms.all;
                   license = if hasAttr "license" meta then
