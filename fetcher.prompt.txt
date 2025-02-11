@@ -58,7 +58,11 @@ api url вот такой `https://addons.mozilla.org/api/v5/addons/search/?lang
   };
 }
 ```
-
+Вместо en-US нужно ставить значение поля default_locale.
 Поля meta опциональные, если их нет, то в выходном файле соответствующего поля тоже не должно быть. Остальные поля обязательные, если нет, то нужно падать.
 
 Результат должен быть отсортирован по полю 'pname'.
+
+
+- Вместо en-US нужно ставить значение поля default_locale.
+- api url вот такой `https://addons.mozilla.org/api/v5/addons/search/?lang=en-US&app=firefox&sort=users&users__gt=100&page_size=50&page=1`

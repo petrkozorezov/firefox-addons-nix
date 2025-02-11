@@ -10,7 +10,7 @@ It accepts optional command-line arguments:
   - --page-size: number of results per page (default: 50)
 
 The API endpoint used is:
-  https://addons.mozilla.org/api/v5/addons/search/?lang=en-US&app=firefox&type=extension&sort=users&page_size=50&page=1
+  https://addons.mozilla.org/api/v5/addons/search/?lang=en-US&app=firefox&sort=users&users__gt=100&page_size=50&page=1
 (with an optional &users__gt parameter when min-users is provided)
 
 The API returns data in the following structure:
@@ -18,7 +18,7 @@ The API returns data in the following structure:
   "page_size": 50,
   "page_count": 100,
   "count": 5000,
-  "next": "https://addons.mozilla.org/api/v5/addons/search/?lang=en-US&app=firefox&type=extension&sort=users&users__gt=100&page_size=50&page=2",
+  "next": "https://addons.mozilla.org/api/v5/addons/search/?lang=en-US&app=firefox&sort=users&users__gt=100&page_size=50&page=2",
   "previous": null,
   "results": [...]
 }
@@ -27,16 +27,16 @@ Only results with:
   status == "public" && current_version.file.status == "public"
 are processed.
 
-Each addon is mapped to the following schema:
+Mapping each addon result uses this schema:
 {
-  pname   = slug;
+  pname   = slug;                # if slug is a dict, its value for key equal to default_locale is used
   version = current_version.version;
   url     = current_version.file.url;
   hash    = current_version.file.hash;  # Converted from a format like "sha256:..." to SRI format for NixOS.
   addonId = guid;
   meta = {
-    homepage            = homepage.url.en-US;
-    description         = summary.en-US;
+    homepage            = homepage.url[default_locale];
+    description         = summary[default_locale];
     license             = current_version.license.slug;
     permissions         = current_version.file.permissions;
     hostPermissions     = current_version.file.host_permissions;
@@ -50,8 +50,7 @@ Each addon is mapped to the following schema:
     promotedCategory    = promoted.category;
   };
 }
-Non‑meta fields are required; if any is missing the script will crash.
-Meta fields are optional and will only appear if present.
+Non‑meta fields are required (the script crashes if any is missing). Meta fields are optional.
 """
 
 import sys
@@ -63,17 +62,16 @@ import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def is_hex_string(s):
-    """Return True if s consists solely of hexadecimal digits."""
+    """Return True if string s consists solely of hexadecimal digits."""
     hex_digits = set("0123456789abcdefABCDEF")
     return all(c in hex_digits for c in s)
 
 def convert_to_sri(hash_str, verbose, addon_guid):
     """
     Convert a hash string into SRI format for NixOS.
-    If the hash is provided in the form "sha256:<hex>" (or "sha512:<hex>"),
-    it extracts the hex part, converts it to base64 and returns a string like:
-      "sha256-<base64>" (or "sha512-<base64>").
-    If the hash already appears in SRI format or is not valid hex, returns the original.
+    If provided as "sha256:<hex>" (or "sha512:<hex>"), it converts the hex part
+    to base64 and returns a string like "sha256-<base64>".
+    If already in SRI format or not valid hex, returns the original.
     """
     if hash_str.startswith("sha256-") or hash_str.startswith("sha512-"):
         if verbose:
@@ -106,7 +104,7 @@ def convert_to_sri(hash_str, verbose, addon_guid):
 
 def fetch_page(page, page_size, min_users, verbose):
     """
-    Fetch a page from the Mozilla Add-ons API.
+    Fetch a page from the Mozilla Add-ons API using the provided parameters.
     If min_users is None, the "users__gt" parameter is omitted.
     Any error during fetching will raise an exception.
     """
@@ -114,7 +112,6 @@ def fetch_page(page, page_size, min_users, verbose):
     params = {
         "lang": "en-US",
         "app": "firefox",
-        "type": "extension",
         "sort": "users",
         "page_size": page_size,
         "page": page
@@ -134,20 +131,27 @@ def fetch_page(page, page_size, min_users, verbose):
 def process_result(result, verbose):
     """
     Process a single addon result.
-    All required fields are extracted. If any required field is missing, an exception is raised.
-    Meta fields are optional and only added if present.
+    All required (non‑meta) fields are extracted (crashing if missing).
+    Meta fields are optional and are added only if present.
+    Localization is determined by the addon's 'default_locale' field.
     """
-    # Check required status values.
+    # Check required statuses.
     if result["status"] != "public":
         raise Exception(f"Addon {result.get('guid')} does not have required status 'public'.")
     if result["current_version"]["file"]["status"] != "public":
         raise Exception(f"Addon {result.get('guid')} current_version file does not have status 'public'.")
 
+    # Extract required field: default_locale.
+    try:
+        default_locale = result["default_locale"]
+    except KeyError as e:
+        raise Exception("Missing required field: default_locale")
+
     # Extract required fields.
     try:
         slug = result["slug"]
         if isinstance(slug, dict):
-            pname = slug["en-US"]
+            pname = slug[default_locale]
         else:
             pname = slug
         version = result["current_version"]["version"]
@@ -166,26 +170,26 @@ def process_result(result, verbose):
         "addonId": addonId,
     }
 
-    # Build meta dictionary (optional fields).
+    # Build meta dictionary from optional fields.
     meta = {}
 
-    # homepage: from homepage.url.en-US
+    # homepage: from homepage.url[default_locale]
     homepage_obj = result.get("homepage")
     if homepage_obj:
         url_obj = homepage_obj.get("url")
         if url_obj:
             if isinstance(url_obj, dict):
-                home = url_obj.get("en-US")
+                home = url_obj.get(default_locale)
             else:
                 home = url_obj
             if home is not None:
                 meta["homepage"] = home
 
-    # description: from summary.en-US
+    # description: from summary[default_locale]
     summary_obj = result.get("summary")
     if summary_obj:
         if isinstance(summary_obj, dict):
-            desc = summary_obj.get("en-US")
+            desc = summary_obj.get(default_locale)
         else:
             desc = summary_obj
         if desc is not None:
@@ -196,7 +200,7 @@ def process_result(result, verbose):
     if license_obj and "slug" in license_obj:
         meta["license"] = license_obj["slug"]
 
-    # permissions, hostPermissions, optionalPermissions from current_version.file
+    # permissions, hostPermissions, optionalPermissions from current_version.file.
     file_obj = result.get("current_version", {}).get("file", {})
     if "permissions" in file_obj:
         meta["permissions"] = file_obj["permissions"]
@@ -205,28 +209,28 @@ def process_result(result, verbose):
     if "optional_permissions" in file_obj:
         meta["optionalPermissions"] = file_obj["optional_permissions"]
 
-    # requiresPayment from result
+    # requiresPayment from result.
     if "requires_payment" in result:
         meta["requiresPayment"] = result["requires_payment"]
 
-    # compatibility: from compatibility.firefox
+    # compatibility: from compatibility.firefox.
     compatibility_obj = result.get("compatibility")
     if compatibility_obj and "firefox" in compatibility_obj:
         meta["compatibility"] = compatibility_obj["firefox"]
 
-    # categories and tags from result
+    # categories and tags.
     if "categories" in result:
         meta["categories"] = result["categories"]
     if "tags" in result:
         meta["tags"] = result["tags"]
 
-    # hasEula and hasPrivacyPolicy from result
+    # hasEula and hasPrivacyPolicy.
     if "has_eula" in result:
         meta["hasEula"] = result["has_eula"]
     if "has_privacy_policy" in result:
         meta["hasPrivacyPolicy"] = result["has_privacy_policy"]
 
-    # promotedCategory: from promoted.category
+    # promotedCategory: from promoted.category.
     promoted_obj = result.get("promoted")
     if promoted_obj and "category" in promoted_obj:
         meta["promotedCategory"] = promoted_obj["category"]
