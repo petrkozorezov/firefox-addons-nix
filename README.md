@@ -1,6 +1,6 @@
 # firefox-addons-nix
 
-This is the daily auto updated nix pkgs repository with Firefox add-ons, with over 50 users from [Mozilla API](https://mozilla.github.io/addons-server/topics/api/overview.html).
+This is the daily auto updated nix pkgs repository with Firefox add-ons, with over 25 users from [Mozilla API](https://mozilla.github.io/addons-server/topics/api/overview.html).
 
 
 ## Usage with Home-manager
@@ -58,17 +58,18 @@ flake.nix
 }
 ```
 
-## Why only add-ons with over 50 users?
+## Why only add-ons with over 25 users?
 
-To reduce nix memory usage and because the API now has a limit on the number of search results (30000 elements).
+To reduce nix memory usage and because the API now has a limit on the number of search results.
 At the time of writing, there were:
 
 ```
-overall: 554051
->   0 users: 136388
->   1 users:  61197
->  10 users:  27067
->  25 users:  18361
->  50 users:  13570 *
-> 100 users:   9975
+search limit:  30000
+     overall: 554051
+ >   0 users: 136388
+ >   1 users:  61197
+ >  10 users:  27067
+ >  25 users:  18361 *
+ >  50 users:  13570
+ > 100 users:   9975
 ```
