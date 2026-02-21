@@ -48,7 +48,8 @@
               derivationArgs = {
                 src = args.pkgs.fetchurl { inherit url hash; };
                 passthru.allow = allowMeta pname pkg meta;
-                meta = meta // {
+                meta = {
+                  addonName = pname;
                   platform = platforms.all;
                   license = if hasAttr "license" meta then
                     findLicense meta.license
