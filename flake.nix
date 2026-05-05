@@ -15,7 +15,7 @@
 
       findLicense = spdxId:
         (findFirst (x:
-          if (hasAttr "spdxId" x.value) then
+          if (isAttrs x.value && hasAttr "spdxId" x.value) then
             x.value.spdxId == spdxId
           else
             false) { value = licenses.unfree; }
